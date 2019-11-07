@@ -115,17 +115,41 @@ type Router struct {
 	// response; useful for local debugging.
 	DumpErrors bool
 
+	// notFound is a configurable http.Handler which is called when no matching
+	// route is found. If it is not set, notFoundHandler is used.
+	notFound http.Handler
+
 	router     *httprouter.Router
 	middleware []Middleware
 
 	parent *Router
 }
 
+type Option func(*Router)
+
+// WithNotFoundHandler is an Option available for NewRouter to configure the
+// not found handler.
+func WithNotFoundHandler(h http.Handler) Option {
+	return func(r *Router) {
+		r.notFound = h
+	}
+}
+
 // NewRouter returns a new initialized Router.
-func NewRouter() *Router {
+func NewRouter(options ...Option) *Router {
 	hr := httprouter.New()
 	r := &Router{router: hr}
-	hr.NotFound = notFoundHandler(r)
+
+	for _, option := range options {
+		option(r)
+	}
+
+	if r.notFound == nil {
+		hr.NotFound = notFoundHandler(r)
+	} else {
+		hr.NotFound = r.notFound
+	}
+
 	return r
 }
 

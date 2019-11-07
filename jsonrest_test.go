@@ -59,15 +59,30 @@ func TestRequestURLParams(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-	r := jsonrest.NewRouter()
+	t.Run("no override", func(t *testing.T) {
+		r := jsonrest.NewRouter()
+		w := do(r, http.MethodGet, "/invalid_path", nil)
+		assert.Equal(t, w.Result().StatusCode, 404)
+		assert.JSONEqual(t, w.Body.String(), m{
+			"error": m{
+				"code":    "not_found",
+				"message": "url not found",
+			},
+		})
+	})
 
-	w := do(r, http.MethodGet, "/invalid_path", nil)
-	assert.Equal(t, w.Result().StatusCode, 404)
-	assert.JSONEqual(t, w.Body.String(), m{
-		"error": m{
-			"code":    "not_found",
-			"message": "url not found",
-		},
+	t.Run("with override", func(t *testing.T) {
+		h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("content-type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			assert.Must(t, json.NewEncoder(w).Encode(m{"proxy": true}))
+		})
+		r := jsonrest.NewRouter(jsonrest.WithNotFoundHandler(h))
+		w := do(r, http.MethodGet, "/invalid_path", nil)
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.JSONEqual(t, w.Body.String(), m{
+			"proxy": true,
+		})
 	})
 }
 
