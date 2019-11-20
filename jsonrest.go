@@ -33,7 +33,11 @@ func (r *Request) BasicAuth() (username, password string, ok bool) {
 func (r *Request) BindBody(val interface{}) error {
 	defer r.req.Body.Close()
 	if err := json.NewDecoder(r.req.Body).Decode(val); err != nil {
-		return UnprocessableEntity("malformed or unexpected json")
+		msg := "malformed or unexpected json"
+		if err, ok := err.(*json.SyntaxError); ok {
+			msg += fmt.Sprintf(": offset %d: %s", err.Offset, err.Error())
+		}
+		return BadRequest(msg)
 	}
 	return nil
 }

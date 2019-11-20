@@ -1,7 +1,6 @@
 package jsonrest_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/deliveroo/assert-go"
@@ -38,9 +38,21 @@ func TestRequestBody(t *testing.T) {
 		return jsonrest.M{"id": params.ID}, nil
 	})
 
-	w := do(r, http.MethodPost, "/users", jsonBody(m{"id": 1}))
-	assert.Equal(t, w.Result().StatusCode, 200)
-	assert.JSONEqual(t, w.Body.String(), m{"id": 1})
+	t.Run("good json", func(t *testing.T) {
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`))
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.JSONEqual(t, w.Body.String(), m{"id": 1})
+	})
+	t.Run("bad json", func(t *testing.T) {
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`))
+		assert.Equal(t, w.Result().StatusCode, 400)
+		assert.JSONEqual(t, w.Body.String(), m{
+			"error": m{
+				"code":    "bad_request",
+				"message": "malformed or unexpected json: offset 8: invalid character '|' looking for beginning of value",
+			},
+		})
+	})
 }
 
 func TestRequestURLParams(t *testing.T) {
@@ -196,12 +208,4 @@ func do(h http.Handler, method, path string, body io.Reader) *httptest.ResponseR
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
-}
-
-func jsonBody(val interface{}) io.Reader {
-	b, err := json.Marshal(val)
-	if err != nil {
-		panic(err)
-	}
-	return bytes.NewReader(b)
 }
