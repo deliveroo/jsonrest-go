@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.13
     working_directory: ~/src/jsonrest-go
     steps:
       - restore_cache:
@@ -18,7 +18,7 @@ jobs:
 
   lint:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.13
     working_directory: ~/src/jsonrest-go
     steps:
       - checkout
@@ -27,7 +27,7 @@ jobs:
 
   test:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.13
     working_directory: ~/src/jsonrest-go
     environment:
       TEST_RESULTS: /tmp/test-results

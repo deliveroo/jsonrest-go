@@ -8,7 +8,7 @@ import (
 )
 
 // Error creates an error that will be rendered directly to the client.
-func Error(status int, code, message string) error {
+func Error(status int, code, message string) *HTTPError {
 	return &HTTPError{
 		Status:  status,
 		Code:    code,
@@ -17,24 +17,24 @@ func Error(status int, code, message string) error {
 }
 
 // BadRequest returns an HTTP 400 Bad Request error with a custom error message.
-func BadRequest(msg string) error {
+func BadRequest(msg string) *HTTPError {
 	return Error(http.StatusBadRequest, "bad_request", msg)
 }
 
 // NotFound returns an HTTP 404 Not Found error with a custom error message.
-func NotFound(msg string) error {
+func NotFound(msg string) *HTTPError {
 	return Error(http.StatusNotFound, "not_found", msg)
 }
 
 // Unauthorized returns an HTTP 401 Unauthorized error with a custom error
 // message.
-func Unauthorized(msg string) error {
+func Unauthorized(msg string) *HTTPError {
 	return Error(http.StatusUnauthorized, "unauthorized", msg)
 }
 
 // UnprocessableEntity returns an HTTP 422 UnprocessableEntity error with a
 // custom error message.
-func UnprocessableEntity(msg string) error {
+func UnprocessableEntity(msg string) *HTTPError {
 	return Error(http.StatusUnprocessableEntity, "unprocessable_entity", msg)
 }
 
@@ -51,6 +51,8 @@ type HTTPError struct {
 	Message string
 	Details []string
 	Status  int
+
+	wrapped error
 }
 
 // MarshalJSON implements the json.Marshaler interface.
@@ -71,6 +73,23 @@ func (err *HTTPError) MarshalJSON() ([]byte, error) {
 // Error implements the error interface.
 func (err *HTTPError) Error() string {
 	return fmt.Sprintf("jsonrest: %v: %v", err.Code, err.Message)
+}
+
+// Wrap wraps an inner error with the HTTPError.
+func (err *HTTPError) Wrap(inner error) *HTTPError {
+	err.wrapped = inner
+	return err
+}
+
+// Unwrap returns the wrapped error, if any.
+func (err *HTTPError) Unwrap() error {
+	return err.wrapped
+}
+
+// Cause returns the wrapped error, if any. For compatibility with
+// github.com/pkg/errors.
+func (err *HTTPError) Cause() error {
+	return err.wrapped
 }
 
 // translateError coerces err into an HTTPError that can be marshaled directly

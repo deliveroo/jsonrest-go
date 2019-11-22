@@ -43,6 +43,7 @@ func TestRequestBody(t *testing.T) {
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{"id": 1})
 	})
+
 	t.Run("bad json", func(t *testing.T) {
 		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`))
 		assert.Equal(t, w.Result().StatusCode, 400)
