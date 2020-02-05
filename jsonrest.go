@@ -54,6 +54,24 @@ func (r *Request) Param(name string) string {
 	return r.params.ByName(name)
 }
 
+type Param struct {
+	Key   string
+	Value string
+}
+
+// Params retrieves all URL parameters.
+func (r *Request) Params() []Param {
+	pp := make([]Param, 0, len(r.params))
+	for _, p := range r.params {
+		pp = append(pp, Param{
+			Key:   p.Key,
+			Value: p.Value,
+		})
+
+	}
+	return pp
+}
+
 // Query retrieves a querystring value by name.
 func (r *Request) Query(name string) string {
 	return r.req.URL.Query().Get(name)

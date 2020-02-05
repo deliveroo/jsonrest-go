@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -45,15 +46,28 @@ func TestRequestBody(t *testing.T) {
 
 func TestRequestURLParams(t *testing.T) {
 	r := jsonrest.NewRouter()
-	r.Get("/users/:id", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+	r.Get("/users/:id/:action", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
 		id := r.Param("id")
 		if id == "" {
 			return nil, errors.New("missing id")
 		}
+		action := r.Param("action")
+		if action == "" {
+			return nil, errors.New("missing action")
+		}
+		params := r.Params()
+		if len(params) != 2 {
+			return nil, errors.New("unexpected params count")
+		}
+		for _, p := range params {
+			if r.Param(p.Key) != p.Value {
+				return nil, fmt.Errorf("params with key %v does not match", p.Key)
+			}
+		}
 		return jsonrest.M{"id": id}, nil
 	})
 
-	w := do(r, http.MethodGet, "/users/123", nil)
+	w := do(r, http.MethodGet, "/users/123/win", nil)
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"id": "123"})
 }
