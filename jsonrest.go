@@ -54,19 +54,11 @@ func (r *Request) Param(name string) string {
 	return r.params.ByName(name)
 }
 
-type Param struct {
-	Key   string
-	Value string
-}
-
 // Params retrieves all URL parameters.
-func (r *Request) Params() []Param {
-	pp := make([]Param, 0, len(r.params))
+func (r *Request) Params() map[string]string {
+	pp := make(map[string]string, len(r.params))
 	for _, p := range r.params {
-		pp = append(pp, Param{
-			Key:   p.Key,
-			Value: p.Value,
-		})
+		pp[p.Key] = p.Value
 
 	}
 	return pp

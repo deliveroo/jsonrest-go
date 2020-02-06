@@ -59,9 +59,9 @@ func TestRequestURLParams(t *testing.T) {
 		if len(params) != 2 {
 			return nil, errors.New("unexpected params count")
 		}
-		for _, p := range params {
-			if r.Param(p.Key) != p.Value {
-				return nil, fmt.Errorf("params with key %v does not match", p.Key)
+		for k, v := range params {
+			if r.Param(k) != v {
+				return nil, fmt.Errorf("params with key %v does not match", k)
 			}
 		}
 		return jsonrest.M{"id": id}, nil
