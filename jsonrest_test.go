@@ -62,11 +62,11 @@ func TestFormFile(t *testing.T) {
 	const defaultMaxMemory = 32 << 20
 	r := jsonrest.NewRouter()
 	r.Post("/file_upload", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
-		fh, err := r.FormFile("file", defaultMaxMemory)
+		f, fh, err := r.FormFile("file", defaultMaxMemory)
 		if err != nil {
 			return nil, err
 		}
-
+		f.Close()
 		return jsonrest.M{"fileName": fh.Filename}, nil
 	})
 

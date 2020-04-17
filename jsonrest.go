@@ -44,18 +44,11 @@ func (r *Request) BindBody(val interface{}) error {
 }
 
 // FormFile returns the first file for the provided form key.
-func (r *Request) FormFile(name string, maxMultipartMemory int64) (*multipart.FileHeader, error) {
-	if r.req.MultipartForm == nil {
-		if err := r.req.ParseMultipartForm(maxMultipartMemory); err != nil {
-			return nil, BadRequest("cannot parse multipart form").Wrap(err)
-		}
+func (r *Request) FormFile(name string, maxMultipartMemory int64) (multipart.File, *multipart.FileHeader, error) {
+	if err := r.req.ParseMultipartForm(maxMultipartMemory); err != nil {
+		return nil, nil,  BadRequest("cannot parse multipart form").Wrap(err)
 	}
-	f, fh, err := r.req.FormFile(name)
-	if err != nil {
-		return nil, BadRequest("cannot find file").Wrap(err)
-	}
-	f.Close()
-	return fh, err
+	return  r.req.FormFile(name)
 }
 
 // Get returns the meta value for the key.
