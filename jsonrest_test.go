@@ -1,10 +1,12 @@
 package jsonrest_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -21,7 +23,7 @@ func TestSimpleGet(t *testing.T) {
 		return jsonrest.M{"message": "Hello World"}, nil
 	})
 
-	w := do(r, http.MethodGet, "/hello", nil)
+	w := do(r, http.MethodGet, "/hello", nil, "application/json")
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"message": "Hello World"})
 }
@@ -39,13 +41,13 @@ func TestRequestBody(t *testing.T) {
 	})
 
 	t.Run("good json", func(t *testing.T) {
-		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`))
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`), "application/json")
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{"id": 1})
 	})
 
 	t.Run("bad json", func(t *testing.T) {
-		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`))
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`), "application/json")
 		assert.Equal(t, w.Result().StatusCode, 400)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -53,6 +55,41 @@ func TestRequestBody(t *testing.T) {
 				"message": "malformed or unexpected json: offset 8: invalid character '|' looking for beginning of value",
 			},
 		})
+	})
+}
+
+func TestFormFile(t *testing.T) {
+	const defaultMaxMemory = 32 << 20
+	r := jsonrest.NewRouter()
+	r.Post("/file_upload", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+		fh, err := r.FormFile("file", defaultMaxMemory)
+		if err != nil {
+			return nil, err
+		}
+
+		return jsonrest.M{"fileName": fh.Filename}, nil
+	})
+
+	t.Run("good file", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		mw := multipart.NewWriter(buf)
+		w, err := mw.CreateFormFile("file", "test")
+		assert.Must(t, err)
+		_, err = w.Write([]byte("test"))
+		assert.Must(t, err)
+		mw.Close()
+
+		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType())
+		assert.Equal(t, r.Result().StatusCode, 200)
+		assert.JSONEqual(t, r.Body.String(), m{"fileName": "test"})
+	})
+
+	t.Run("an empty file", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		mw := multipart.NewWriter(buf)
+
+		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType())
+		assert.Equal(t, r.Result().StatusCode, 400)
 	})
 }
 
@@ -66,7 +103,7 @@ func TestRequestURLParams(t *testing.T) {
 		return jsonrest.M{"id": id}, nil
 	})
 
-	w := do(r, http.MethodGet, "/users/123", nil)
+	w := do(r, http.MethodGet, "/users/123", nil, "application/json")
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"id": "123"})
 }
@@ -74,7 +111,7 @@ func TestRequestURLParams(t *testing.T) {
 func TestNotFound(t *testing.T) {
 	t.Run("no override", func(t *testing.T) {
 		r := jsonrest.NewRouter()
-		w := do(r, http.MethodGet, "/invalid_path", nil)
+		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
 		assert.Equal(t, w.Result().StatusCode, 404)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -91,7 +128,7 @@ func TestNotFound(t *testing.T) {
 			assert.Must(t, json.NewEncoder(w).Encode(m{"proxy": true}))
 		})
 		r := jsonrest.NewRouter(jsonrest.WithNotFoundHandler(h))
-		w := do(r, http.MethodGet, "/invalid_path", nil)
+		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"proxy": true,
@@ -132,7 +169,7 @@ func TestError(t *testing.T) {
 				return nil, tt.err
 			})
 
-			w := do(r, http.MethodGet, "/fail", nil)
+			w := do(r, http.MethodGet, "/fail", nil, "application/json")
 			assert.Equal(t, w.Result().StatusCode, tt.wantStatus)
 			assert.JSONEqual(t, w.Body.String(), tt.want)
 		})
@@ -146,7 +183,7 @@ func TestDumpInternalError(t *testing.T) {
 		return nil, errors.New("foo error occurred")
 	})
 
-	w := do(r, http.MethodGet, "/", nil)
+	w := do(r, http.MethodGet, "/", nil, "application/json")
 	assert.Equal(t, w.Result().StatusCode, 500)
 	assert.JSONEqual(t, w.Body.String(), m{
 		"error": m{
@@ -171,7 +208,7 @@ func TestMiddleware(t *testing.T) {
 		})
 		r.Get("/test", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
-		w := do(r, http.MethodGet, "/test", nil)
+		w := do(r, http.MethodGet, "/test", nil, "application/json")
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 	})
@@ -191,12 +228,12 @@ func TestMiddleware(t *testing.T) {
 		withoutMiddleware := r.Group()
 		withoutMiddleware.Get("/withoutmiddleware", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
-		w := do(r, http.MethodGet, "/withmiddleware", nil)
+		w := do(r, http.MethodGet, "/withmiddleware", nil, "application/json")
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 
 		called = false
-		w = do(r, http.MethodGet, "/withoutmiddleware", nil)
+		w = do(r, http.MethodGet, "/withoutmiddleware", nil, "application/json")
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.False(t, called)
 	})
@@ -204,8 +241,9 @@ func TestMiddleware(t *testing.T) {
 
 type m map[string]interface{}
 
-func do(h http.Handler, method, path string, body io.Reader) *httptest.ResponseRecorder {
+func do(h http.Handler, method, path string, body io.Reader, contentType string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
+	req.Header.Set("Content-Type", contentType)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
