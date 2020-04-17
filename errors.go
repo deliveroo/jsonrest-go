@@ -97,7 +97,7 @@ func (err *HTTPError) Cause() error {
 func translateError(err error, dumpInternalError bool) *HTTPError {
 	httpErr, ok := err.(*HTTPError)
 	if !ok {
-		httpErr = &(*unknownError) // shallow copy
+		httpErr = unknownError
 		if dumpInternalError {
 			httpErr.Details = dumpError(err)
 		}
