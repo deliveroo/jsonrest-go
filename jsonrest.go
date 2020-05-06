@@ -72,6 +72,11 @@ func (r *Request) Query(name string) string {
 	return r.req.URL.Query().Get(name)
 }
 
+// Raw returns the underlying *http.Request.
+func (r *Request) Raw() *http.Request {
+	return r.req
+}
+
 // Route returns the route pattern.
 func (r *Request) Route() string {
 	return r.route
