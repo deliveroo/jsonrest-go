@@ -48,10 +48,35 @@ jobs:
       - store_test_results:
           path: /tmp/test-results
 
+  release:
+    docker:
+      - image: deliveroo/semantic-release:1.0.0
+    steps:
+      - checkout
+      - run: semantic-release -r ${CIRCLE_REPOSITORY_URL}
+
+  commitlint:
+    docker:
+      - image: deliveroo/semantic-release:1.0.0
+    steps:
+      - checkout
+      - run: commitlint --from $(git rev-parse origin/master) --to $CIRCLE_SHA1 --verbose
+
 workflows:
   version: 2
   all:
     jobs:
       - build
+      - commitlint
       - lint
       - test
+      - release:
+          requires:
+            - build
+            - lint
+            - commitlint
+            - test
+          filters:
+            branches:
+              only:
+                - master

@@ -46,3 +46,7 @@ func logging(next jsonrest.Endpoint) jsonrest.Endpoint {
     }
 }
 ```
+
+## Contributing
+
+Review the [contributing guidelines](./CONTRIBUTING.md).
