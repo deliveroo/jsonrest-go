@@ -1,8 +1,17 @@
+# GLOBAL-ANCHORS - DockerHub Authentication changes applied - PROD-1431 / PROD-1435
+global_context: &global_context
+  context:
+    - org-global
+global_dockerhub_auth: &global_dockerhub_auth
+  auth:
+    username: $GLOBAL_DOCKERHUB_USERNAME
+    password: $GLOBAL_DOCKERHUB_PASSWORD
 version: 2
 jobs:
   build:
     docker:
       - image: circleci/golang:1.13
+        <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     steps:
       - restore_cache:
@@ -15,23 +24,22 @@ jobs:
           key: v1-pkg-cache
           paths:
             - "/go/pkg"
-
   lint:
     docker:
       - image: circleci/golang:1.13
+        <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     steps:
       - checkout
       - run: make setup
       - run: make lint
-
   test:
     docker:
       - image: circleci/golang:1.13
+        <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     environment:
       TEST_RESULTS: /tmp/test-results
-
     steps:
       - checkout
       - run: mkdir -p $TEST_RESULTS
@@ -47,29 +55,32 @@ jobs:
           destination: raw-test-output
       - store_test_results:
           path: /tmp/test-results
-
   release:
     docker:
       - image: deliveroo/semantic-release:1.0.0
+        <<: *global_dockerhub_auth
     steps:
       - checkout
       - run: semantic-release -r ${CIRCLE_REPOSITORY_URL}
-
   commitlint:
     docker:
       - image: deliveroo/semantic-release:1.0.0
+        <<: *global_dockerhub_auth
     steps:
       - checkout
       - run: commitlint --from $(git rev-parse origin/master) --to $CIRCLE_SHA1 --verbose
-
 workflows:
   version: 2
   all:
     jobs:
-      - build
-      - commitlint
-      - lint
-      - test
+      - build:
+          <<: *global_context
+      - commitlint:
+          <<: *global_context
+      - lint:
+          <<: *global_context
+      - test:
+          <<: *global_context
       - release:
           requires:
             - build
@@ -80,3 +91,4 @@ workflows:
             branches:
               only:
                 - master
+          <<: *global_context
