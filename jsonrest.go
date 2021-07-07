@@ -12,43 +12,44 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/gin-gonic/gin"
 )
 
 // A Request represents a RESTful HTTP request received by the server.
 type Request struct {
-	meta           sync.Map
-	params         httprouter.Params
-	req            *http.Request
-	responseWriter http.ResponseWriter
-	route          string
+	route   string
+	meta    sync.Map
+	context *gin.Context
 }
 
 // BasicAuth returns the username and password, if the request uses HTTP Basic
 // Authentication.
 func (r *Request) BasicAuth() (username, password string, ok bool) {
-	return r.req.BasicAuth()
+	return r.context.Request.BasicAuth()
 }
 
 // BindBody unmarshals the request body into the given value.
 func (r *Request) BindBody(val interface{}) error {
-	defer r.req.Body.Close()
-	if err := json.NewDecoder(r.req.Body).Decode(val); err != nil {
+	err := r.context.ShouldBind(val)
+	if err != nil {
 		msg := "malformed or unexpected json"
 		if details := jsonErrorDetails(err); details != "" {
 			msg += ": " + details
 		}
+
 		return BadRequest(msg).Wrap(err)
 	}
+
 	return nil
 }
 
 // FormFile returns the first file for the provided form key.
 func (r *Request) FormFile(name string, maxMultipartMemory int64) (multipart.File, *multipart.FileHeader, error) {
-	if err := r.req.ParseMultipartForm(maxMultipartMemory); err != nil {
+	if err := r.context.Request.ParseMultipartForm(maxMultipartMemory); err != nil {
 		return nil, nil, BadRequest("cannot parse multipart form").Wrap(err)
 	}
-	return r.req.FormFile(name)
+
+	return r.context.Request.FormFile(name)
 }
 
 // Get returns the meta value for the key.
@@ -59,22 +60,22 @@ func (r *Request) Get(key interface{}) interface{} {
 
 // Header retrieves a header value by name.
 func (r *Request) Header(name string) string {
-	return r.req.Header.Get(name)
+	return r.context.Request.Header.Get(name)
 }
 
 // Param retrieves a URL parameter value by name.
 func (r *Request) Param(name string) string {
-	return r.params.ByName(name)
+	return r.context.Param(name)
 }
 
 // Query retrieves a querystring value by name.
 func (r *Request) Query(name string) string {
-	return r.req.URL.Query().Get(name)
+	return r.context.Request.URL.Query().Get(name)
 }
 
 // Raw returns the underlying *http.Request.
 func (r *Request) Raw() *http.Request {
-	return r.req
+	return r.context.Request
 }
 
 // Route returns the route pattern.
@@ -84,12 +85,12 @@ func (r *Request) Route() string {
 
 // Method returns the HTTP method.
 func (r *Request) Method() string {
-	return r.req.Method
+	return r.context.Request.Method
 }
 
 // SetResponseHeader sets a response header.
 func (r *Request) SetResponseHeader(key, val string) {
-	r.responseWriter.Header().Set(key, val)
+	r.context.Writer.Header().Set(key, val)
 }
 
 // Set sets a meta value for the key.
@@ -99,7 +100,7 @@ func (r *Request) Set(key, val interface{}) {
 
 // URL returns the URI being requested from the server.
 func (r *Request) URL() *url.URL {
-	return r.req.URL
+	return r.context.Request.URL
 }
 
 // M is a shorthand for map[string]interface{}. Responses from the server may be
@@ -135,9 +136,9 @@ type Router struct {
 
 	// notFound is a configurable http.Handler which is called when no matching
 	// route is found. If it is not set, notFoundHandler is used.
-	notFound http.Handler
+	notFound gin.HandlerFunc
 
-	router     *httprouter.Router
+	router     *gin.Engine
 	middleware []Middleware
 
 	parent *Router
@@ -147,7 +148,7 @@ type Option func(*Router)
 
 // WithNotFoundHandler is an Option available for NewRouter to configure the
 // not found handler.
-func WithNotFoundHandler(h http.Handler) Option {
+func WithNotFoundHandler(h gin.HandlerFunc) Option {
 	return func(r *Router) {
 		r.notFound = h
 	}
@@ -155,7 +156,7 @@ func WithNotFoundHandler(h http.Handler) Option {
 
 // NewRouter returns a new initialized Router.
 func NewRouter(options ...Option) *Router {
-	hr := httprouter.New()
+	hr := gin.New()
 	r := &Router{router: hr}
 
 	for _, option := range options {
@@ -163,9 +164,9 @@ func NewRouter(options ...Option) *Router {
 	}
 
 	if r.notFound == nil {
-		hr.NotFound = notFoundHandler(r)
+		notFoundHandler(r)
 	} else {
-		hr.NotFound = r.notFound
+		hr.NoRoute(r.notFound)
 	}
 
 	return r
@@ -247,37 +248,40 @@ func applyMiddleware(e Endpoint, r *Router) Endpoint {
 			for i := len(r.middleware) - 1; i >= 0; i-- {
 				e = r.middleware[i](e)
 			}
+
 			if r.parent == nil {
 				break
 			}
+
 			r = r.parent
 		}
+
 		return e(ctx, req)
 	}
 }
 
 // endpointToHandler converts an endpoint to an httprouter.Handle function.
-func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+func endpointToHandler(e Endpoint, path string, r *Router) func(c *gin.Context) {
+	return func(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("panic serving %v: %+v", req.RequestURI, r)
+				log.Printf("panic serving %v: %+v", c.Request.RequestURI, r)
 				debug.PrintStack()
-				sendJSON(w, 500, unknownError)
+				sendJSON(c.Writer, 500, unknownError)
 			}
 		}()
-		result, err := e(req.Context(), &Request{
-			params:         params,
-			req:            req,
-			responseWriter: w,
-			route:          path,
+
+		result, err := e(c.Request.Context(), &Request{
+			context: c,
+			route:   path,
 		})
 		if err != nil {
 			httpErr := translateError(err, r.DumpErrors)
-			sendJSON(w, httpErr.Status, httpErr)
+			sendJSON(c.Writer, httpErr.Status, httpErr)
 			return
 		}
-		sendJSON(w, 200, result)
+
+		sendJSON(c.Writer, 200, result)
 	}
 }
 
@@ -288,20 +292,18 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 	// closes the response early.
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
+
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
+
 	if err := enc.Encode(v); err != nil {
 		panic(err)
 	}
 }
 
 // notFoundHandler returns a 404 not found response to the caller.
-func notFoundHandler(r *Router) http.Handler {
-	endpoint := func(_ context.Context, req *Request) (interface{}, error) {
-		return nil, Error(404, "not_found", "url not found")
-	}
-	h := endpointToHandler(endpoint, "", r)
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		h(w, req, nil)
+func notFoundHandler(r *Router) {
+	r.router.NoRoute(func(c *gin.Context) {
+		c.JSON(404, Error(404, "not_found", "url not found"))
 	})
 }

@@ -6,11 +6,11 @@ global_dockerhub_auth: &global_dockerhub_auth
   auth:
     username: $GLOBAL_DOCKERHUB_USERNAME
     password: $GLOBAL_DOCKERHUB_PASSWORD
-version: 2
+version: 3
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.13
+      - image: circleci/golang:1.15
         <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     steps:
@@ -26,7 +26,7 @@ jobs:
             - "/go/pkg"
   lint:
     docker:
-      - image: circleci/golang:1.13
+      - image: circleci/golang:1.15
         <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     steps:
@@ -35,7 +35,7 @@ jobs:
       - run: make lint
   test:
     docker:
-      - image: circleci/golang:1.13
+      - image: circleci/golang:1.15
         <<: *global_dockerhub_auth
     working_directory: ~/src/jsonrest-go
     environment:
