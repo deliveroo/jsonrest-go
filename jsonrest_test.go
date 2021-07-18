@@ -51,7 +51,8 @@ func TestRequestBody(t *testing.T) {
 		assert.Equal(t, w.Result().StatusCode, 400)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
-				"code":    "bad_request",
+				"code":    "json_error",
+				"status":  "bad_request",
 				"message": "malformed or unexpected json: offset 8: invalid character '|' looking for beginning of value",
 			},
 		})
@@ -115,7 +116,8 @@ func TestNotFound(t *testing.T) {
 		assert.Equal(t, w.Result().StatusCode, 404)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
-				"code":    "not_found",
+				"status":  "not_found",
+				"code":    "url_not_found",
 				"message": "url not found",
 			},
 		})
@@ -159,15 +161,17 @@ func TestError(t *testing.T) {
 			errors.New("missing id"),
 			500, m{
 				"error": m{
+					"status":  "internal_server_error",
 					"code":    "unknown_error",
 					"message": "an unknown error occurred",
 				},
 			},
 		},
 		{
-			jsonrest.Error(404, "customer_not_found", "customer not found"),
+			jsonrest.NotFound("customer_not_found", "customer not found"),
 			404, m{
 				"error": m{
+					"status":  "not_found",
 					"code":    "customer_not_found",
 					"message": "customer not found",
 				},
@@ -204,6 +208,7 @@ func TestDumpInternalError(t *testing.T) {
 	assert.Equal(t, w.Result().StatusCode, 500)
 	assert.JSONEqual(t, w.Body.String(), m{
 		"error": m{
+			"status":  "internal_server_error",
 			"code":    "unknown_error",
 			"message": "an unknown error occurred",
 			"details": []string{

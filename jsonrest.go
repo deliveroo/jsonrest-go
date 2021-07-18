@@ -38,7 +38,7 @@ func (r *Request) BindBody(val interface{}) error {
 		if details := jsonErrorDetails(err); details != "" {
 			msg += ": " + details
 		}
-		return BadRequest(msg).Wrap(err)
+		return BadRequest("json_error", msg).Wrap(err)
 	}
 	return nil
 }
@@ -298,7 +298,7 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 // notFoundHandler returns a 404 not found response to the caller.
 func notFoundHandler(r *Router) http.Handler {
 	endpoint := func(_ context.Context, req *Request) (interface{}, error) {
-		return nil, Error(404, "not_found", "url not found")
+		return nil, NotFound("url_not_found", "url not found")
 	}
 	h := endpointToHandler(endpoint, "", r)
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

@@ -26,25 +26,25 @@ func Error(status int, code, message string) *HTTPError {
 }
 
 // BadRequest returns an HTTP 400 Bad Request error with a custom error message.
-func BadRequest(msg string) *HTTPError {
-	return Error(http.StatusBadRequest, "bad_request", msg)
+func BadRequest(code, msg string) *HTTPError {
+	return Error(http.StatusBadRequest, code, msg)
 }
 
 // NotFound returns an HTTP 404 Not Found error with a custom error message.
-func NotFound(msg string) *HTTPError {
-	return Error(http.StatusNotFound, "not_found", msg)
+func NotFound(code, msg string) *HTTPError {
+	return Error(http.StatusNotFound, code, msg)
 }
 
 // Unauthorized returns an HTTP 401 Unauthorized error with a custom error
 // message.
-func Unauthorized(msg string) *HTTPError {
-	return Error(http.StatusUnauthorized, "unauthorized", msg)
+func Unauthorized(code, msg string) *HTTPError {
+	return Error(http.StatusUnauthorized, code, msg)
 }
 
 // UnprocessableEntity returns an HTTP 422 UnprocessableEntity error with a
 // custom error message.
-func UnprocessableEntity(msg string) *HTTPError {
-	return Error(http.StatusUnprocessableEntity, "unprocessable_entity", msg)
+func UnprocessableEntity(code, msg string) *HTTPError {
+	return Error(http.StatusUnprocessableEntity, code, msg)
 }
 
 // unknownError is returned for an internal server error.
@@ -73,6 +73,7 @@ func (err *HTTPError) StatusCode() int {
 func (err *HTTPError) MarshalJSON() ([]byte, error) {
 	var wp struct {
 		Error struct {
+			Status  string   `json:"status,omitempty"`
 			Code    string   `json:"code"`
 			Message string   `json:"message"`
 			Details []string `json:"details,omitempty"`
@@ -81,6 +82,7 @@ func (err *HTTPError) MarshalJSON() ([]byte, error) {
 	wp.Error.Code = err.Code
 	wp.Error.Message = err.Message
 	wp.Error.Details = err.Details
+	wp.Error.Status = strings.ReplaceAll(strings.ToLower(http.StatusText(err.Status)), " ", "_")
 	return json.Marshal(wp)
 }
 
